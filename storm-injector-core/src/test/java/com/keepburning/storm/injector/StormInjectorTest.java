@@ -18,6 +18,9 @@ public class StormInjectorTest {
         @Inject
         @Named("storm.conf.target_class.name")
         private String name;
+
+        @Inject
+        private String factoryNameUpper;
     }
 
     static class SubClass1 {
@@ -37,6 +40,10 @@ public class StormInjectorTest {
 
     static class FactoryClass {
 
+        @Inject
+        @Named("storm.conf.factory.name")
+        private String name;
+
         public SubClass1 subClass1() {
             return new SubClass1();
         }
@@ -48,6 +55,8 @@ public class StormInjectorTest {
         public Long subClass1Value() {
             return 10L;
         }
+
+        public String factoryNameUpper() { return this.name.toUpperCase(); }
 
     }
 
@@ -91,12 +100,14 @@ public class StormInjectorTest {
     public void testInjectField() throws Exception {
         Map<String, Object> testConf = new HashMap<>();
         testConf.put("storm.conf.target_class.name", "targetName");
+        testConf.put("storm.conf.factory.name", "factoryName");
 
         TargetClass t = new TargetClass();
         StormInjector.injectField(testConf, t, FactoryClass.class, FactoryClass3.class);
         Assert.assertNotNull(t.subClass1);
         Assert.assertEquals("I'm SubClass1", t.subClass1.name);
         Assert.assertEquals("targetName", t.name);
+        Assert.assertEquals("FACTORYNAME", t.factoryNameUpper);
     }
 
     @Test

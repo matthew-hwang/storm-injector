@@ -6,6 +6,8 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
 import javax.inject.Inject;
@@ -49,7 +51,9 @@ public class StormInjector {
                     LOG.debug("Field was injected; target={}, fieldType={}, name={}, isNamed={}, value={}",
                             target.getClass().getName(), fieldType, name, isNamed, value);
 
-                    injectField(stormConf, value, factoryMap);
+                    if (value != null) {
+                        injectField(stormConf, value, factoryMap);
+                    }
                 } else {
                     throw new RuntimeException("Can't assign value (type invalid); target=" + target.getClass().getName() +
                             ", expected=" + fieldType.getName() + ", actual=" + value.getClass().getName());
@@ -59,7 +63,7 @@ public class StormInjector {
     }
 
     private static Map<String, StormFactoryHolder> resolveFactories(Map stormConf, Class... factoryClasses) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException, InstantiationException {
-        Map<String, StormFactoryHolder> factoryMap = new HashMap<>();
+        List<Object> factoryObjList = new LinkedList<>();
 
         for (Class factoryClass : factoryClasses) {
             Constructor[] ctors = factoryClass.getDeclaredConstructors();
@@ -75,7 +79,12 @@ public class StormInjector {
             ctor.setAccessible(true);
 
             Object object = ctor.newInstance();
-            Method[] methods = object.getClass().getMethods();
+            factoryObjList.add(object);
+        }
+
+        Map<String, StormFactoryHolder> factoryMap = new HashMap<>();
+        for (Object factoryObj : factoryObjList) {
+            Method[] methods = factoryObj.getClass().getMethods();
             for (Method method : methods) {
                 final Class returnType = method.getReturnType();
                 final String methodName = method.getName();
@@ -86,15 +95,19 @@ public class StormInjector {
                         && !isObjectMethod(method)) {
 
                     if (!factoryMap.containsKey(methodName)) {
-                        factoryMap.put(methodName, new StormFactoryHolder(object, method));
+                        factoryMap.put(methodName, new StormFactoryHolder(factoryObj, method));
                     } else {
                         StormFactoryHolder holder = factoryMap.get(methodName);
                         throw new RuntimeException("Factory method is already registered with same name; " +
                                 "registered=" + holder.getFactoryObj().getClass().getName() + "." + holder.getMethod().getName() +
-                                "conflicted=" + object.getClass().getName() + "." + methodName);
+                                "conflicted=" + factoryObj.getClass().getName() + "." + methodName);
                     }
                 }
             }
+        }
+
+        for (Object factoryObj : factoryObjList) {
+            injectField(stormConf, factoryObj, factoryMap);
         }
 
         return factoryMap;
